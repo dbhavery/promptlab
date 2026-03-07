@@ -9,8 +9,8 @@ from rich.text import Text
 
 from promptlab.runner import TestCaseResult, TestSuiteResult
 
-# Module-level console for output.
-_console = Console()
+# Module-level console — force_terminal avoids Windows encoding crashes.
+_console = Console(force_terminal=True)
 
 
 def format_result_line(result: TestCaseResult) -> Text:
