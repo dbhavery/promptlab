@@ -1,0 +1,18 @@
+name: greeting-quality
+model: ollama/qwen3:8b
+prompt: |
+  You are a helpful assistant. Greet the user warmly.
+tests:
+  - input: "Hello"
+    assertions:
+      - type: contains
+        value: "hello"
+        case_insensitive: true
+      - type: max_tokens
+        value: 100
+  - input: "My name is Don"
+    assertions:
+      - type: contains
+        value: "Don"
+      - type: not_contains
+        value: "I don't know"
