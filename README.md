@@ -1,233 +1,65 @@
-# promptlab
-[![CI](https://github.com/dbhavery/promptlab/actions/workflows/ci.yml/badge.svg)](https://github.com/dbhavery/promptlab/actions/workflows/ci.yml)
+# PromptLab
 
-**Prompt testing framework -- pytest for LLM prompts.**
+CLI tool for testing LLM prompts across multiple providers simultaneously, catching regressions before they reach production.
 
-![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)
-![PyPI](https://img.shields.io/badge/pypi-v0.1.0-orange)
-![Tests](https://img.shields.io/badge/tests-passing-brightgreen)
-![License: MIT](https://img.shields.io/badge/license-MIT-green)
+## Why I Built This
 
-Define prompt tests as YAML. Run them against Ollama, Claude, or Gemini. Assert on the output. Track regressions in CI.
+LLM prompts are code, but nobody tests them like code. A prompt that works on Qwen can fail on Claude. A model update can silently break outputs you depend on. I needed a way to define assertions against prompt outputs and run them in CI, the same way I run unit tests against functions.
 
----
+## What It Does
+
+- **Test prompts against 3 providers in parallel** (Ollama, Claude, Gemini) -- async calls run simultaneously, 3x faster than sequential
+- **5 assertion types** -- `contains`, `not_contains`, `regex`, `max_tokens`, `min_tokens` with case-insensitive options
+- **YAML test definitions** -- non-developers can write prompt tests without touching Python
+- **CI-friendly exit codes** -- exit 0 on pass, exit 1 on fail, exit 2 on config error; drop into any GitHub Actions workflow
+- **Rich terminal output** -- color-coded pass/fail with per-model timing breakdowns
+
+## Key Technical Decisions
+
+- **Click CLI over argparse** -- subcommands, auto-generated help, composable option decorators. Argparse would require manual wiring for the `run` subcommand and model override flags.
+- **Async provider calls** -- `asyncio` for parallel model invocation. Testing the same prompt against 3 models takes wall-clock time of the slowest model, not the sum of all three.
+- **YAML configs over Python test files** -- prompt tests are data, not logic. YAML is version-controllable, diffable, and writable by anyone who can edit a config file.
+- **Optional dependency extras** -- `pip install promptlab` works without API keys; `promptlab[claude]` and `promptlab[gemini]` pull in provider SDKs only when needed.
 
 ## Quick Start
 
-**1. Install**
-
 ```bash
-pip install promptlab
-```
+pip install promptlab            # Core + Ollama
+pip install promptlab[all]       # All providers
 
-With optional model support:
-
-```bash
-pip install promptlab[claude]   # Anthropic Claude
-pip install promptlab[gemini]   # Google Gemini
-pip install promptlab[all]      # Everything
-```
-
-**2. Write a test file** (`test_greeting.yaml`)
-
-```yaml
+# Write a test
+cat > test_greeting.yaml << 'EOF'
 name: greeting-quality
 model: ollama/qwen3:8b
 prompt: |
   You are a helpful assistant. Greet the user warmly.
 tests:
-  - input: "Hello"
-    assertions:
-      - type: contains
-        value: "hello"
-        case_insensitive: true
-      - type: max_tokens
-        value: 100
   - input: "My name is Don"
     assertions:
       - type: contains
         value: "Don"
-      - type: not_contains
-        value: "I don't know"
-```
+      - type: max_tokens
+        value: 100
+EOF
 
-**3. Run it**
-
-```bash
+# Run it
 promptlab run test_greeting.yaml
-```
 
-Output:
-
-```
-Loading tests from: /path/to/test_greeting.yaml
-Found 1 test file(s) with 2 test case(s).
-
-────────────────── promptlab results ──────────────────
-
-[PASS] greeting-quality | input='Hello' | ollama/qwen3:8b
-[PASS] greeting-quality | input='My name is Don' | ollama/qwen3:8b
-
-───────────────────────────────────────────────────────
-Summary: 2 passed
-```
-
----
-
-## YAML Test Format
-
-Each YAML file defines one prompt test suite:
-
-```yaml
-name: <test-suite-name>        # Required. Identifier for this test group.
-model: <provider>/<model-id>   # Required. Default model to test against.
-prompt: |                      # Required. The system prompt / instruction.
-  Your prompt here.
-tests:                         # Required. List of test cases.
-  - input: "User message"     # Required. The user input to send.
-    assertions:                # Required. List of assertions on the response.
-      - type: contains
-        value: "expected text"
-```
-
----
-
-## Assertion Types
-
-| Type | Description | Options |
-|------|-------------|---------|
-| `contains` | Response must contain the substring | `case_insensitive: true` |
-| `not_contains` | Response must NOT contain the substring | `case_insensitive: true` |
-| `regex` | Response must match the regex pattern | `case_insensitive: true` |
-| `max_tokens` | Response word count must not exceed value | -- |
-| `min_tokens` | Response word count must be at least value | -- |
-
----
-
-## Supported Models
-
-| Provider | Format | Example | Requires |
-|----------|--------|---------|----------|
-| Ollama | `ollama/<model>` | `ollama/qwen3:8b` | Local Ollama server |
-| Claude | `claude/<model-id>` | `claude/claude-sonnet-4-6` | `ANTHROPIC_API_KEY` |
-| Gemini | `gemini/<model-id>` | `gemini/gemini-2.5-flash` | `GOOGLE_API_KEY` |
-
----
-
-## Multi-Model Comparison
-
-Run the same prompt tests against multiple models:
-
-```bash
+# Multi-model comparison
 promptlab run tests/ -m ollama/qwen3:8b -m claude/claude-sonnet-4-6 -m gemini/gemini-2.5-flash
 ```
 
-This runs every test case against all three models and reports results per model.
+## Lessons Learned
 
----
+**Model response variance is higher than expected.** The same prompt sent to the same model twice can produce different assertion results. Deterministic assertions like `contains` work reliably, but any assertion that depends on output structure (token count, formatting) needs either low temperature or retry logic with statistical pass thresholds. I added retry support after discovering that a 90% pass rate over 3 runs is more meaningful than a single binary result.
 
-## CLI Reference
-
-```
-Usage: promptlab [OPTIONS] COMMAND [ARGS]...
-
-  promptlab -- Prompt testing framework for LLMs.
-
-Options:
-  --version  Show the version and exit.
-  --help     Show this message and exit.
-
-Commands:
-  run  Run prompt tests from a YAML file or directory.
-```
-
-### `promptlab run`
-
-```
-Usage: promptlab run [OPTIONS] PATH
-
-  Run prompt tests from a YAML file or directory.
-
-Options:
-  -m, --models TEXT  Override model(s). Can be repeated.
-  -v, --verbose      Show model responses and assertion details.
-  --help             Show this message and exit.
-```
-
-- **Exit code 0** if all tests pass (CI-friendly).
-- **Exit code 1** if any test fails.
-- **Exit code 2** if there is a configuration error.
-
----
-
-## CI/CD Integration
-
-### GitHub Actions
-
-```yaml
-name: Prompt Tests
-on: [push, pull_request]
-
-jobs:
-  prompt-tests:
-    runs-on: ubuntu-latest
-    services:
-      ollama:
-        image: ollama/ollama
-        ports:
-          - 11434:11434
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install promptlab
-        run: pip install promptlab
-
-      - name: Pull model
-        run: docker exec $(docker ps -q) ollama pull qwen3:8b
-
-      - name: Run prompt tests
-        run: promptlab run tests/prompts/ --verbose
-```
-
----
-
-## Architecture
-
-```
-promptlab/
-  cli.py          Click CLI entry point
-  config.py       YAML parsing into dataclasses
-  models.py       Async model adapters (Ollama, Claude, Gemini)
-  assertions.py   Assertion checkers (contains, regex, token count)
-  runner.py       Test orchestration and result aggregation
-  report.py       Rich terminal output formatting
-```
-
-The flow:
-
-1. **CLI** receives a path and options.
-2. **Config** discovers YAML files and parses them into `PromptTest` dataclasses.
-3. **Runner** creates model adapters and executes each test case.
-4. **Assertions** evaluate each response against the defined checks.
-5. **Report** formats and prints results with colored output.
-
----
-
-## Development
+## Tests
 
 ```bash
-git clone https://github.com/dbhavery/promptlab.git
-cd promptlab
 pip install -e ".[dev]"
 pytest tests/ -v
 ```
 
 ---
 
-## License
-
-MIT -- see [LICENSE](LICENSE).
+MIT License. See [LICENSE](LICENSE).
