@@ -1,4 +1,5 @@
 # promptlab
+[![CI](https://github.com/dbhavery/promptlab/actions/workflows/ci.yml/badge.svg)](https://github.com/dbhavery/promptlab/actions/workflows/ci.yml)
 
 **Prompt testing framework -- pytest for LLM prompts.**
 
