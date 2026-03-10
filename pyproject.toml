@@ -3,7 +3,7 @@ name = "promptlab"
 version = "0.1.0"
 description = "Prompt testing framework — pytest for LLM prompts"
 readme = "README.md"
-authors = [{name = "Donald Havery", email = "dbhavery@gmail.com"}]
+authors = [{name = "Donald Havery", email = "dbhavery@users.noreply.github.com"}]
 license = {text = "MIT"}
 requires-python = ">=3.10"
 keywords = ["llm", "prompt", "testing", "cli", "ai", "evaluation"]

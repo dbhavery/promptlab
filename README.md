@@ -34,10 +34,10 @@ model: ollama/qwen3:8b
 prompt: |
   You are a helpful assistant. Greet the user warmly.
 tests:
-  - input: "My name is Don"
+  - input: "My name is Alice"
     assertions:
       - type: contains
-        value: "Don"
+        value: "Alice"
       - type: max_tokens
         value: 100
 EOF

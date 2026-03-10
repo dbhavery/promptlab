@@ -33,10 +33,10 @@ def valid_yaml(tmp_path: Path) -> Path:
                 case_insensitive: true
               - type: max_tokens
                 value: 100
-          - input: "My name is Don"
+          - input: "My name is Alice"
             assertions:
               - type: contains
-                value: "Don"
+                value: "Alice"
               - type: not_contains
                 value: "I don't know"
     """)
